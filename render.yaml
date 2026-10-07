@@ -1,0 +1,23 @@
+# ============================================================
+# Render Blueprint — Fleet Protocol AI 指挥官服务器
+# 用法：把 bridge/ 推到 GitHub → Render 选 Blueprint → 自动创建
+# 环境变量（在 Render 服务页配置）：
+#   DASHSCOPE_API_KEY : 阿里云 DashScope API key（必填）
+#   SERVER_TOKEN     : 访问令牌，玩家 exe 里带这个（必填，防白嫖）
+#   PORT             : 端口，默认 8080（Render 自动注入，可留空）
+# ============================================================
+services:
+  - type: web
+    name: fleet-ai
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bridge_server.py
+    envVars:
+      - key: DASHSCOPE_API_KEY
+        sync: false          # 部署后在服务页面手动填，不写死在文件
+      - key: SERVER_TOKEN
+        sync: false
+      - key: PORT
+        value: 8080

@@ -1,0 +1,13 @@
+# ===== 安全：绝不提交包含 API key 的文件 =====
+config.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# 日志/临时
+*.log
+*.txt
