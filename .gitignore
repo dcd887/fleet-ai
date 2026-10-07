@@ -10,4 +10,5 @@ venv/
 
 # 日志/临时
 *.log
-*.txt
+# 保留 requirements.txt（必须以 .txt 结尾的文件是依赖清单，需要入库）
+!requirements.txt
