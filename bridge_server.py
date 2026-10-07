@@ -13,6 +13,7 @@
 #   python bridge_server.py
 #   Godot 启动参数：--ai-server ws://127.0.0.1:8080 --ai-token dev123
 import asyncio
+import http
 import json
 import os
 import sys
@@ -23,6 +24,14 @@ try:
 except ImportError:
     print("[Server] 缺少依赖 websockets，请先执行: pip install websockets openai")
     sys.exit(1)
+
+# websockets 14+ 的 process_request 需返回 Response 对象；12-13 用三元组
+try:
+    from websockets.http11 import Response as _WSResponse
+    from websockets.datastructures import Headers as _WSHeaders
+    _WS_NEW_API = True
+except ImportError:
+    _WS_NEW_API = False
 
 try:
     from openai import OpenAI
@@ -151,13 +160,41 @@ async def ai_commander(websocket):
         print(f"[Server] 客户端断开: {peer}")
 
 
+async def process_request(*args):
+    """Render 等平台的健康检查：非 WebSocket 的 GET / 返回 200，WebSocket 握手继续。
+    兼容 websockets 12-13 (path, request_headers) 与 14+ (connection, request) 两代签名与返回格式"""
+    path = None
+    headers = None
+    if len(args) >= 2:
+        second = args[1]
+        if isinstance(second, str):
+            path = args[0]  # 旧版签名 (path, request_headers)
+            headers = args[1]
+        else:
+            path = getattr(second, "path", None)  # 新版签名 request.path
+            headers = getattr(second, "headers", None)
+    elif len(args) == 1:
+        path = getattr(args[0], "path", None)
+        headers = getattr(args[0], "headers", None)
+    # 仅当 path 为 / 且请求头带 Upgrade: websocket 时才是 WS 握手，放行
+    if path == "/" and headers is not None:
+        upgrade = headers.get("Upgrade", "") if hasattr(headers, "get") else ""
+        if upgrade and "websocket" in str(upgrade).lower():
+            return None  # WebSocket 握手，继续处理
+        if _WS_NEW_API:
+            return _WSResponse(200, "OK", _WSHeaders({"Content-Type": "text/plain; charset=utf-8"}), b"ok")
+        return (http.HTTPStatus.OK, [("Content-Type", "text/plain; charset=utf-8")], b"ok")
+    return None
+
+
 async def main():
     print(f"[Server] 远程 AI 指挥官启动  base_url={BASE_URL} model={MODEL} 端口={PORT}")
     if SERVER_TOKEN:
         print(f"[Server] 鉴权已开启（SERVER_TOKEN）")
     else:
         print("[Server] 警告：未设置 SERVER_TOKEN，任何能连到端口的人都能使用你的 API key 额度！")
-    async with websockets.serve(ai_commander, "0.0.0.0", PORT, max_size=2_000_000):
+    async with websockets.serve(ai_commander, "0.0.0.0", PORT, max_size=2_000_000,
+                                process_request=process_request):
         await asyncio.Future()  # 永久运行
 
 
